@@ -18,146 +18,282 @@ from IPython.core.display import HTML
 from IPython.display import display_html, display, Javascript, FileLink, FileLinks, Image
 import ipywidgets as widgets
 import pandas as pd
-pd.set_option('display.max_columns', None)
 
 @magics_class
 class Drill(Magics):
+    # Static Variables
     myip = None
     session = None
     drill_connected = False
-    pd_display_idx = False
-    pd_display_max = 1000
-    pd_replace_crlf = True
-    drill_host = ""
-    drill_pinned_ip = ""
-    drill_user = ""
     drill_pass = ""
-    drill_base_url = ""
-    drill_pin_to_ip = True
-    drill_headers = {}
+
+    # Other Variables Dictionary
+    drill_opts = {}
+
+    # Option Format: [ Value, Description]
+    drill_opts['pd_display_idx'] = [False, "Display the Pandas Index with output"]
+    drill_opts['pd_replace_crlf'] = [True, "Replace extra crlfs in outputs with String representations of CRs and LFs"]
+    drill_opts['pd_max_colwidth'] = [50, 'Max column width to display']
+    drill_opts['pd_display.max_rows'] = [1000, 'Number of Max Rows']
+    drill_opts['pd_display.max_columns'] = [None, 'Max Columns']
+
+    pd.set_option('display.max_columns', drill_opts['pd_display.max_columns'][0])
+    pd.set_option('display.max_rows', drill_opts['pd_display.max_rows'][0])
+    pd.set_option('max_colwidth', drill_opts['pd_max_colwidth'][0])
+
+
+
+
+    drill_opts['drill_host'] = ['', "Not sure"]
+    try:
+        tuser = os.environ['JPY_USER']
+    except:
+        tuser = ''
+    drill_opts['drill_user'] = [tuser, "User to connect with drill - Can be set via ENV Var: JPY_USER otherwise will prompt"]
+    try:
+        turl = os.environ['DRILL_BASE_URL']
+    except:
+        turl = ""
+    drill_opts['drill_base_url'] = [turl, "URL to connect to Drill server. Can be set via ENV Var: DRILL_BASE_URL"]
+    drill_opts['drill_pin_to_ip'] = [True, "Obtain an IP from the name and connect directly to that IP"]
+    drill_opts['drill_headers'] = [{}, "Customer Headers to use for Drill connections"]
+    drill_opts['drill_url'] = ['', "Actual URL used for connection (base URL is the URL that is passed in as default"]
+    drill_opts['drill_verify'] = ['/etc/ssl/certs/ca-certificates.crt', "Either the path to the CA Cert validation bundle or False for don't verify"]
+
+
+    def setvar(self, line):
+        pd_set_vars = ['pd_display.max_columns', 'pd_display.max_rows', 'pd_max_colwidth']
+        allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip']
+
+        tline = line.replace('set ', '')
+        tkey = tline.split(' ')[0]
+        tval = tline.split(' ')[1]
+        if tval == "False":
+            tval = False
+        if tval == "True":
+            tval = True
+        if tkey in allowed_opts:
+            self.drill_opts[tkey][0] = tval
+            if tkey in pd_set_vars:
+                try:
+                    t = int(tval)
+                except:
+                    t = tval
+                pd.set_option(tkey.replace('pd_', ''), t)
+        else:
+            print("You tried to set variable: %s - Not in Allowed options!" % tkey)
+            
 
     def __init__(self, shell, *args, **kwargs):
         super(Drill, self).__init__(shell)
         self.myip = get_ipython()
 
+    def retStatus(self):
+        print("Current State of Drill Interface:")
+        print("Connected: %s" % self.drill_connected)
+        print("")
+        print("Display Properties:")
+        for k, v in self.drill_opts.items():
+            if k.find("pd_") == 0:
+                try:
+                    t = int(v[1])
+                except:
+                    t = v[1]
+                print("%s: %s\t\t\t\t%s" % (k, v[0], t))
 
-    def retConnStatus(self):
-        if self.drill_connected == True:
-            print("Drill is currrently connected to %s" % self.drill_base_url)
-        else:
-            print("Drill is not connected")
+
+        print("")
+        print("Drill Properties:")
+        for k, v in self.drill_opts.items():
+            if k.find("drill_") == 0:
+                print("%s: %s\t\t\t\t%s" % (k, v[0], v[1]))
+
     def disconnectDrill(self):
         if self.drill_connected == True:
-            print("Disconnected Drill Session from %s" % self.drill_base_url)
+            print("Disconnected Drill Session from %s" % self.drill_opts['drill_url'][0])
             self.session = None
-            self.drill_base_url = None
             self.drill_pass = None
             self.drill_connected = False
+            self.drill_opts['drill_url'][0] = ''
         else:
             print("Drill Not Currently Connected")
 
-    def connectDrill(self):
+    def connectDrill(self, prompt=False):
         global tpass
         if self.drill_connected == False:
-            try:
-                tuser = os.environ['JPY_USER']
-            except:
-                raise Exception("Could not find user at ENV JPY_USER - Please use '%drill connect alt' to specify")
-            print("Connecting as user %s" % tuser)
-
-            try:
-                turl = os.environ['DRILL_BASE_URL']
-            except:
-                raise Exception("No DRILL_BASE_URL specified in ENV - Please use '%drill connect alt' to specify")
-            print("Connecting to Drill URL: %s" % turl)
-
+            if prompt == True or self.drill_opts['drill_user'][0] == '':
+                print("User not specified in JPY_USER or user override requested")
+                tuser = input("Please type user name if desired: ")
+                self.drill_opts['drill_user'][0] = tuser
+            print("Connecting as user %s" % self.drill_opts['drill_user'][0])
             print("")
-            print("Now, please enter the password you wish to connect with:")
 
+            if prompt == True or self.drill_opts['drill_base_url'][0] == '':
+                print("Drill Base URL not specified in DRILL_BASE_URL or override requested")
+                turl = input("Please type in the full Drill URL: ")
+                self.drill_opts['drill_base_url'][0] = turl
+            print("Connecting to Drill URL: %s" % self.drill_opts['drill_base_url'][0])
+            print("")
+
+            print("Please enter the password you wish to connect with:")
             tpass = ""
             self.myip.ex("from getpass import getpass\ntpass = getpass(prompt='Drill Connect Password: ')")
             tpass = self.myip.user_ns['tpass']
             self.session = requests.Session()
 
-            if self.drill_pin_to_ip == True:
-
-                tipurl = self.getipurl(turl)
+            if self.drill_opts['drill_pin_to_ip'][0] == True:
+                tipurl = self.getipurl(self.drill_opts['drill_base_url'][0])
                 print("")
                 print("Pinning to IP for this session: %s" % tipurl)
                 print("")
-                self.drill_base_url = tipurl
+                self.drill_opts['drill_url'][0] = tipurl
                 self.session.mount(tipurl, host_header_ssl.HostHeaderSSLAdapter())
-
+                self.drill_opts['drill_verify'][0] = False
+                requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
             else:
-                self.drill_base_url = turl
-            self.drill_user = tuser
+                self.drill_opts['drill_url'][0] = self.drill_opts['drill_base_url'][0]
             self.drill_pass = tpass
             self.myip.user_ns['tpass'] = ""
-            #try:
-            if 1 == 1:
+            try:
                 self.session = self.authDrill()
                 self.drill_connected = True
-                print("%s - Drill Connected!" % self.drill_base_url)
-            #except:
-            #    print("Connection Error - Perhaps Bad Usename/Password?")
+                print("%s - Drill Connected!" % self.drill_opts['drill_url'][0])
+            except:
+                print("Connection Error - Perhaps Bad Usename/Password?")
 
         else:
             print("Drill is already connected - Please type %drill for help on what you can you do")
 
 
-    def connectDrillAlt(self):
-        global tpass
-        if self.drill_connected == False:
-            try:
-                tuser = os.environ['JPY_USER']
-            except:
-                tuser = ""
-            print("Currently, the user is set to %s" % tuser)
-            print("To use this user, just press enter at the prompt, otherwise type a different user name")
-            tmp = input("Please type new user name if desired: ")
-            if tmp != "":
-                tuser = tmp
-            try:
-                turl = os.environ['DRILL_BASE_URL']
-            except:
-                turl = ""
-            print("Currently the drill base url is set to %s" % turl)
-            print("To use this URL, please press enter at the prompt, otherwise type a different url to connect with")
-            tmpu = input("Please type a new URL if desired:")
-            if tmpu != "":
-                turl = tmpu
-            print("Now, please enter the password you wish to connect with:")
-            tpass = ""
-            self.myip.ex("from getpass import getpass\ntpass = getpass(prompt='Drill Connect Password: ')")
-            tpass = self.myip.user_ns['tpass']
-            self.session = requests.Session()
 
-            if self.drill_pin_to_ip == True:
+    def runQuery(self, query):
+        if query.find(";") >= 0:
+            print("WARNING - Do not type a trailing semi colon on queries, your query will fail (like it probably did here)")
 
-                tipurl = self.getipurl(turl)
-                print("")
-                print("Provided Host: %s" % turl)
-                print("")
-                print("Pinning to IP for this session: %s" % tipurl)
-                print("")
-                self.drill_base_url = tipurl
-                self.session.mount(tipurl, host_header_ssl.HostHeaderSSLAdapter())
+        if self.drill_connected == True:
+            url = self.drill_opts['drill_url'][0] + "/query.json"
+            payload = {"queryType":"SQL", "query":query}
+            cur_headers = self.drill_opts['drill_headers'][0]
+            cur_headers["Content-type"] = "application/json"
+            starttime = int(time.time())
+            r = self.session.post(url, data=json.dumps(payload), headers=cur_headers, verify=self.drill_opts['drill_verify'][0])
+            endtime = int(time.time())
+            query_time = endtime - starttime
+            return r, query_time
 
+    def authDrill(self):
+        url = self.drill_opts['drill_url'][0] + "/j_security_check"
+        login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
+
+        r = self.session.post(url, data=login, headers=self.drill_headers, verify=self.drill_opts['drill_verify'][0])
+        if r.status_code == 200:
+            if r.text.find("Invalid username/password credentials") >= 0:
+                raise Exception("Invalid username/password credentials")
+            elif r.text.find('<li><a href="/logout">Log Out (') >= 0:
+                pass
             else:
-                self.drill_base_url = turl
-            self.drill_user = tuser
-            self.drill_pass = tpass
-            self.myip.user_ns['tpass'] = ""
-            #try:
-            if 1 == 1:
-                self.session = self.authDrill()
-                self.drill_connected = True
-                print("%s - Drill Connected!" % self.drill_base_url)
-            #except:
-            #    print("Connection Error - Perhaps Bad Usename/Password?")
-
+                raise Exception("Unknown HTTP 200 Code: %s" % r.text)
         else:
-            print("Drill is already connected - Please type %drill for help on what you can you do")
+            raise Exception("Status Code: %s - Error" % r.status_code)
+        return self.session
+
+
+
+    @line_cell_magic
+    def drill(self, line, cell=None):
+        if cell is None:
+            line = line.replace("\r", "")
+            if line == "":
+                print("Help with Drill Functions")
+                print("%drill            - This Help")
+                print("%drill connect    - Connect to your instance of Drill") 
+                print("%drill connect alt   - Connect to a different drill cluster or use a different user (will prompt)")
+                print("%drill status     - Show the Connection Status of Drill")
+                print("%drill disconnect - Disconnect from your instance of Drill")
+                print("")
+                print("Run Drill Queries")
+                print("%%drill")
+                print("select * from your table")
+                print("")
+                print("Ran with two % and a query, it queries a table and returns a df")
+                print("The df is displayed but also stored in variable called prev_drill")
+                print("")
+            elif line.lower() == "status":
+                self.retStatus()
+            elif line.lower() == "disconnect":
+                self.disconnectDrill()
+            elif line.lower() == "connect alt":
+                self.connectDrill(True)
+            elif line.lower() == "connect":
+                self.connectDrill(False)
+            elif line.lower() .find('set ') == 0:
+                self.setvar(line)
+            else:
+                print("I am sorry, I don't know what you want to do, try just %drill for help options")
+        else:
+            cell = cell.replace("\r", "")
+            if self.drill_connected == True:
+                res, qtime = self.runQuery(cell)
+                if res == "notconnected":
+                    pass
+                else:
+                    if res.status_code == 200:
+                        if res.text.find("Invalid username/password credentials.") >= 0:
+                            print("It looks like your Drill Session has expired, please run %drill connect to resolve")
+                            self.disconnectDrill()
+                            self.myip.set_next_input("%drill connect")
+                        else:
+                            try:
+                                jrecs = json.loads(res.text, object_pairs_hook=OrderedDict)
+                            except:
+                                print("Error loading: %s " % res.text)
+                            cols = jrecs['columns']
+                            myrecs = jrecs['rows']
+                            df = pd.read_json(json.dumps(myrecs))
+                            df = df[cols]
+
+                            self.myip.user_ns['prev_drill'] = df
+                            mycnt = len(df)
+                            print("%s Records in Approx %s seconds" % (mycnt,qtime))
+                            print("")
+                            #button = widgets.Button(description="Cur Results")
+                            #button.on_click(self.myip.user_ns['drill_edwin_class'].resultsNewWin)
+                            #display(button)
+
+                            if mycnt <= self.drill_opts['pd_display.max_rows'][0]:
+                                print("Testing max_colwidth: %s" %  pd.get_option('max_colwidth'))
+                                display(HTML(df.to_html(index=self.drill_opts['pd_display_idx'][0])))
+                            else:
+                                print("Number of results (%s) greater than pd_display_max(%s)" % (mycnt, self.drill_opts['pd_display_max'][0]))
+
+
+                    else:
+                        print("Error Returned - Code: %s" % res.status_code)
+                        emsg = json.loads(res.text, object_pairs_hook=OrderedDict)
+                        print("Error Text:\n%s" % emsg['errorMessage'])
+            else:
+                print("Drill is not connected: Please see help at %drill  - To Connect: %drill connect")
+
+    #Helper Functions
+
+    def getipurl(self, url):
+        ts1 = url.split("://")
+        scheme = ts1[0]
+        t1 = ts1[1]
+        ts2 = t1.split(":")
+        host = ts2[0]
+        port = ts2[1]
+        ip = socket.gethostbyname(host)
+        self.drill_host = host
+        self.drill_ip = ip
+        ipurl = "%s://%s:%s" % (scheme, ip, port)
+        self.drill_headers = {}
+        #self.drill_headers = {"Host": self.drill_host}
+        return ipurl
+
+
+    #Display Only functions
+
 
     def replaceHTMLCRLF(self, instr):
         gridhtml = instr.replace("<CR><LF>", "<BR>")
@@ -196,142 +332,3 @@ class Drill(Magics):
 
         pd.set_option('max_colwidth', max_col)
         pd.set_option('display.max_rows', max_rows)
-
-
-
-    def getipurl(self, url):
-        ts1 = url.split("://")
-        scheme = ts1[0]
-        t1 = ts1[1]
-        ts2 = t1.split(":")
-        host = ts2[0]
-        port = ts2[1]
-        ip = socket.gethostbyname(host)
-        self.drill_host = host
-        self.drill_ip = ip
-        ipurl = "%s://%s:%s" % (scheme, ip, port)
-        self.drill_headers = {}
-        #self.drill_headers = {"Host": self.drill_host}
-        return ipurl
-
-    def runQuery(self, query):
-        if query.find(";") >= 0:
-            print("WARNING - Do not type a trailing semi colon on queries, your query will fail (like it probably did here)")
-        if self.drill_pin_to_ip == True:
-            verify = False
-            requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-        else:
-            verify = "/etc/ssl/certs/ca-certificates.crt"
-
-        if self.drill_connected == True:
-            url = self.drill_base_url + "/query.json"
-            payload = {"queryType":"SQL", "query":query}
-            cur_headers = self.drill_headers
-            cur_headers["Content-type"] = "application/json"
-            starttime = int(time.time())
-            r = self.session.post(url, data=json.dumps(payload), headers=cur_headers, verify=verify)
-            endtime = int(time.time())
-            query_time = endtime - starttime
-            return r, query_time
-
-
-    def authDrill(self):
-        url = self.drill_base_url + "/j_security_check"
-        login = {'j_username': self.drill_user, 'j_password': self.drill_pass}
-
-        verify = "/etc/ssl/certs/ca-certificates.crt"
-
-        if self.drill_pin_to_ip == True:
-            verify = False
-            requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-        else:
-            verify = "/etc/ssl/certs/ca-certificates.crt"
-
-        r = self.session.post(url, data=login, headers=self.drill_headers, verify=verify)
-        if r.status_code == 200:
-            if r.text.find("Invalid username/password credentials") >= 0:
-                raise Exception("Invalid username/password credentials")
-            elif r.text.find('<li><a href="/logout">Log Out (') >= 0:
-                pass
-            else:
-                raise Exception("Unknown HTTP 200 Code: %s" % r.text)
-        else:
-            raise Exception("Status Code: %s - Error" % r.status_code)
-        return self.session
-
-    @line_cell_magic
-    def drill(self, line, cell=None):
-        if cell is None:
-            line = line.replace("\r", "")
-            if line == "":
-                print("Help with Drill Functions")
-                print("%drill            - This Help")
-                print("%drill connect    - Connect to your instance of Drill") 
-                print("%drill connect alt   - Connect to a different drill cluster or use a different user (will prompt)") 
-                print("%drill status     - Show the Connection Status of Drill")
-                print("%drill disconnect - Disconnect from your instance of Drill")
-                print("")
-                print("Run Drill Queries")
-                print("%%drill")
-                print("select * from your table")
-                print("")
-                print("Ran with two % and a query, it queries a table and returns a df")
-                print("The df is displayed but also stored in variable called prev_drill")
-                print("")
-            elif line.lower() == "status":
-                self.retConnStatus()
-            elif line.lower() == "disconnect":
-                self.disconnectDrill()
-            elif line.lower() == "connect alt":
-                self.connectDrillAlt()
-            elif line.lower() == "connect":
-                self.connectDrill()
-            else:
-                print("I am sorry, I don't know what you want to do, try just %drill for help options")
-        else:
-            cell = cell.replace("\r", "")
-            if self.drill_connected == True:
-                res, qtime = self.runQuery(cell)
-                if res == "notconnected":
-                    pass
-                else:
-                    if res.status_code == 200:
-                        if res.text.find("Invalid username/password credentials.") >= 0:
-                            print("It looks like your Drill Session has expired, please run %drill connect to resolve")
-                            self.disconnectDrill()
-                            self.myip.set_next_input("%drill connect")
-                        else:
-                            try:
-                                jrecs = json.loads(res.text, object_pairs_hook=OrderedDict)
-                            except:
-                                print("Error loading: %s " % res.text)
-                            cols = jrecs['columns']
-                            myrecs = jrecs['rows']
-                            df = pd.read_json(json.dumps(myrecs))
-                            df = df[cols]
-
-                            self.myip.user_ns['prev_drill'] = df
-                            mycnt = len(df)
-                            print("%s Records in Approx %s seconds" % (mycnt,qtime))
-                            print("")
-                            button = widgets.Button(description="Cur Results")
-                            button.on_click(self.myip.user_ns['drill_edwin_class'].resultsNewWin)
-                            display(button)
-                            if mycnt <= self.pd_display_max:
-                                display(HTML(df.to_html(index=self.pd_display_idx)))
-                            else:
-                                print("Number of results (%s) greater than pd_display_max(%s) - Press button to see results in new window" % (mycnt, self.pd_display_max))
-
-
-                    else:
-                        print("Error Returned - Code: %s" % res.status_code)
-                        emsg = json.loads(res.text, object_pairs_hook=OrderedDict)
-                        print("Error Text:\n%s" % emsg['errorMessage'])
-            else:
-                print("Drill is not connected: Please see help at %drill  - To Connect: %drill connect")
-
-
-
-
-
-
