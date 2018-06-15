@@ -264,7 +264,7 @@ class Drill(Magics):
                                 print("Testing max_colwidth: %s" %  pd.get_option('max_colwidth'))
                                 display(HTML(df.to_html(index=self.drill_opts['pd_display_idx'][0])))
                             else:
-                                print("Number of results (%s) greater than pd_display_max(%s)" % (mycnt, self.drill_opts['pd_display_max'][0]))
+                                print("Number of results (%s) greater than pd_display_max(%s)" % (mycnt, self.drill_opts['pd_display.max_rows'][0]))
 
 
                     else:
