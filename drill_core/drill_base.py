@@ -56,14 +56,15 @@ class Drill(Magics):
         turl = ""
     drill_opts['drill_base_url'] = [turl, "URL to connect to Drill server. Can be set via ENV Var: DRILL_BASE_URL"]
     drill_opts['drill_pin_to_ip'] = [True, "Obtain an IP from the name and connect directly to that IP"]
+    drill_opts['drill_rewrite_host'] = [False, "When using Pin to IP, rewrite the host header to match the name of base_url"]
     drill_opts['drill_headers'] = [{}, "Customer Headers to use for Drill connections"]
     drill_opts['drill_url'] = ['', "Actual URL used for connection (base URL is the URL that is passed in as default"]
     drill_opts['drill_verify'] = ['/etc/ssl/certs/ca-certificates.crt', "Either the path to the CA Cert validation bundle or False for don't verify"]
-
+    drill_opts['drill_ignore_ssl_warn'] = [False, "Supress SSL warning upon connection - Not recommended"]
 
     def setvar(self, line):
         pd_set_vars = ['pd_display.max_columns', 'pd_display.max_rows', 'pd_max_colwidth']
-        allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip']
+        allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip', 'drill_rewrite_host']
 
         tline = line.replace('set ', '')
         tkey = tline.split(' ')[0]
@@ -147,13 +148,22 @@ class Drill(Magics):
                 print("Pinning to IP for this session: %s" % tipurl)
                 print("")
                 self.drill_opts['drill_url'][0] = tipurl
-                self.session.mount(tipurl, host_header_ssl.HostHeaderSSLAdapter())
-                self.drill_opts['drill_verify'][0] = False
-                requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+#                self.session.mount(tipurl, host_header_ssl.HostHeaderSSLAdapter())
+                if self.drill_opts['drill_rewrite_host'][0] == True:
+                    self.session.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
+                    t = self.drill_opts['drill_base_url'][0]
+                    spltAr = t.split("://")
+                    i = (0,1)[len(spltAr)>1]
+                    dm = spltAr[i].split("?")[0].split('/')[0].split(':')[0].lower()
+                    self.drill_opts['drill_headers'][0]['Host'] = dm
             else:
                 self.drill_opts['drill_url'][0] = self.drill_opts['drill_base_url'][0]
+
             self.drill_pass = tpass
             self.myip.user_ns['tpass'] = ""
+            if self.drill_opts['drill_ignore_ssl_warn'][0] == True:
+                print("Warning: Setting session to ignore SSL warnings - Use at your own risk")
+                requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
             try:
                 self.session = self.authDrill()
                 self.drill_connected = True
