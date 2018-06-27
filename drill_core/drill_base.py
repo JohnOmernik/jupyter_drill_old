@@ -27,34 +27,39 @@ class Drill(Magics):
     drill_connected = False
     drill_pass = ""
 
-    # Other Variables Dictionary
+    debug = False
+
+    # Variables Dictionary
     drill_opts = {}
 
     # Option Format: [ Value, Description]
+
+    # Pandas Variables
     drill_opts['pd_display_idx'] = [False, "Display the Pandas Index with output"]
     drill_opts['pd_replace_crlf'] = [True, "Replace extra crlfs in outputs with String representations of CRs and LFs"]
     drill_opts['pd_max_colwidth'] = [50, 'Max column width to display']
     drill_opts['pd_display.max_rows'] = [1000, 'Number of Max Rows']
     drill_opts['pd_display.max_columns'] = [None, 'Max Columns']
 
+
     pd.set_option('display.max_columns', drill_opts['pd_display.max_columns'][0])
     pd.set_option('display.max_rows', drill_opts['pd_display.max_rows'][0])
     pd.set_option('max_colwidth', drill_opts['pd_max_colwidth'][0])
 
-
-
-
-    drill_opts['drill_host'] = ['', "Not sure"]
+    # Get Env items (User and/or Base URL)
     try:
         tuser = os.environ['JPY_USER']
     except:
         tuser = ''
-    drill_opts['drill_user'] = [tuser, "User to connect with drill - Can be set via ENV Var: JPY_USER otherwise will prompt"]
     try:
         turl = os.environ['DRILL_BASE_URL']
     except:
         turl = ""
+
+    # Drill specific variables
+    drill_opts['drill_user'] = [tuser, "User to connect with drill - Can be set via ENV Var: JPY_USER otherwise will prompt"]
     drill_opts['drill_base_url'] = [turl, "URL to connect to Drill server. Can be set via ENV Var: DRILL_BASE_URL"]
+
     drill_opts['drill_pin_to_ip'] = [True, "Obtain an IP from the name and connect directly to that IP"]
     drill_opts['drill_rewrite_host'] = [False, "When using Pin to IP, rewrite the host header to match the name of base_url"]
     drill_opts['drill_headers'] = [{}, "Customer Headers to use for Drill connections"]
@@ -62,29 +67,9 @@ class Drill(Magics):
     drill_opts['drill_verify'] = ['/etc/ssl/certs/ca-certificates.crt', "Either the path to the CA Cert validation bundle or False for don't verify"]
     drill_opts['drill_ignore_ssl_warn'] = [False, "Supress SSL warning upon connection - Not recommended"]
 
-    def setvar(self, line):
-        pd_set_vars = ['pd_display.max_columns', 'pd_display.max_rows', 'pd_max_colwidth']
-        allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip', 'drill_rewrite_host']
 
-        tline = line.replace('set ', '')
-        tkey = tline.split(' ')[0]
-        tval = tline.split(' ')[1]
-        if tval == "False":
-            tval = False
-        if tval == "True":
-            tval = True
-        if tkey in allowed_opts:
-            self.drill_opts[tkey][0] = tval
-            if tkey in pd_set_vars:
-                try:
-                    t = int(tval)
-                except:
-                    t = tval
-                pd.set_option(tkey.replace('pd_', ''), t)
-        else:
-            print("You tried to set variable: %s - Not in Allowed options!" % tkey)
-            
 
+    # Class Init function - Obtain a reference to the get_ipython()
     def __init__(self, shell, *args, **kwargs):
         super(Drill, self).__init__(shell)
         self.myip = get_ipython()
@@ -108,6 +93,30 @@ class Drill(Magics):
         for k, v in self.drill_opts.items():
             if k.find("drill_") == 0:
                 print("%s: %s\t\t\t\t%s" % (k, v[0], v[1]))
+
+
+    def setvar(self, line):
+        pd_set_vars = ['pd_display.max_columns', 'pd_display.max_rows', 'pd_max_colwidth']
+        allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip', 'drill_rewrite_host', 'drill_ignore_ssl_warn']
+
+        tline = line.replace('set ', '')
+        tkey = tline.split(' ')[0]
+        tval = tline.split(' ')[1]
+        if tval == "False":
+            tval = False
+        if tval == "True":
+            tval = True
+        if tkey in allowed_opts:
+            self.drill_opts[tkey][0] = tval
+            if tkey in pd_set_vars:
+                try:
+                    t = int(tval)
+                except:
+                    t = tval
+                pd.set_option(tkey.replace('pd_', ''), t)
+        else:
+            print("You tried to set variable: %s - Not in Allowed options!" % tkey)
+
 
     def disconnectDrill(self):
         if self.drill_connected == True:
@@ -150,7 +159,7 @@ class Drill(Magics):
                 self.drill_opts['drill_url'][0] = tipurl
 #                self.session.mount(tipurl, host_header_ssl.HostHeaderSSLAdapter())
                 if self.drill_opts['drill_rewrite_host'][0] == True:
-                    self.session.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
+#                    self.session.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
                     t = self.drill_opts['drill_base_url'][0]
                     spltAr = t.split("://")
                     i = (0,1)[len(spltAr)>1]
@@ -164,11 +173,12 @@ class Drill(Magics):
             if self.drill_opts['drill_ignore_ssl_warn'][0] == True:
                 print("Warning: Setting session to ignore SSL warnings - Use at your own risk")
                 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-            try:
-                self.session = self.authDrill()
+            result = -1
+            self.session, result = self.authDrill()
+            if result == 0:
                 self.drill_connected = True
                 print("%s - Drill Connected!" % self.drill_opts['drill_url'][0])
-            except:
+            else:
                 print("Connection Error - Perhaps Bad Usename/Password?")
 
         else:
@@ -194,18 +204,22 @@ class Drill(Magics):
     def authDrill(self):
         url = self.drill_opts['drill_url'][0] + "/j_security_check"
         login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
+        result = -1
+        print(self.drill_opts['drill_headers'][0])
+        r = self.session.post(url, data=login, headers=self.drill_opts['drill_headers'][0], verify=self.drill_opts['drill_verify'][0])
 
-        r = self.session.post(url, data=login, headers=self.drill_headers, verify=self.drill_opts['drill_verify'][0])
         if r.status_code == 200:
             if r.text.find("Invalid username/password credentials") >= 0:
+                result = -2
                 raise Exception("Invalid username/password credentials")
             elif r.text.find('<li><a href="/logout">Log Out (') >= 0:
                 pass
+                result = 0
             else:
                 raise Exception("Unknown HTTP 200 Code: %s" % r.text)
         else:
             raise Exception("Status Code: %s - Error" % r.status_code)
-        return self.session
+        return self.session, result
 
 
 
@@ -294,11 +308,7 @@ class Drill(Magics):
         host = ts2[0]
         port = ts2[1]
         ip = socket.gethostbyname(host)
-        self.drill_host = host
-        self.drill_ip = ip
         ipurl = "%s://%s:%s" % (scheme, ip, port)
-        self.drill_headers = {}
-        #self.drill_headers = {"Host": self.drill_host}
         return ipurl
 
 
