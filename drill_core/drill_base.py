@@ -66,6 +66,7 @@ class Drill(Magics):
     drill_opts['drill_pin_to_ip'] = [False, "Obtain an IP from the name and connect directly to that IP"]
     drill_opts['drill_pinned_ip'] = ["", "IP of pinned connection"]
     drill_opts['drill_rewrite_host'] = [False, "When using Pin to IP, rewrite the host header to match the name of base_url"]
+    drill_opts['drill_inc_port_in_rewrite'] = [False, "When rewriting the host header, include :%port% in the host header"]
     drill_opts['drill_headers'] = [{}, "Customer Headers to use for Drill connections"]
     drill_opts['drill_url'] = ['', "Actual URL used for connection (base URL is the URL that is passed in as default"]
     drill_opts['drill_verify'] = ['/etc/ssl/certs/ca-certificates.crt', "Either the path to the CA Cert validation bundle or False for don't verify"]
@@ -79,30 +80,47 @@ class Drill(Magics):
         self.myip = get_ipython()
 
     def retStatus(self):
+
         print("Current State of Drill Interface:")
-        print("Connected: %s" % self.drill_connected)
-        print("Debug Mode: %s" % self.debug)
+        print("")
+        print("{: <30} {: <50}".format(*["Connected:", str(self.drill_connected)]))
+        print("{: <30} {: <50}".format(*["Debug Mode:", str(self.debug)]))
+
         print("")
         print("Display Properties:")
+        print("-----------------------------------")
         for k, v in self.drill_opts.items():
             if k.find("pd_") == 0:
                 try:
                     t = int(v[1])
                 except:
                     t = v[1]
-                print("%s: %s\t\t\t\t%s" % (k, v[0], t))
+                if v[0] is None:
+                    o = "None"
+                else:
+                    o = v[0]
+                myrow = [k, o, t]
+                print("{: <30} {: <50} {: <20}".format(*myrow))
+                myrow = []
 
 
         print("")
         print("Drill Properties:")
+        print("-----------------------------------")
         for k, v in self.drill_opts.items():
             if k.find("drill_") == 0:
-                print("%s: %s\t\t\t\t%s" % (k, v[0], v[1]))
+                if v[0] is None:
+                    o = "None"
+                else:
+                    o = str(v[0])
+                myrow = [k, o, v[1]]
+                print("{: <30} {: <50} {: <20}".format(*myrow))
+                myrow = []
 
 
     def setvar(self, line):
         pd_set_vars = ['pd_display.max_columns', 'pd_display.max_rows', 'pd_max_colwidth']
-        allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip', 'drill_rewrite_host', 'drill_ignore_ssl_warn']
+        allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip', 'drill_rewrite_host', 'drill_ignore_ssl_warn', 'drill_inc_port_in_rewrite']
 
         tline = line.replace('set ', '')
         tkey = tline.split(' ')[0]
@@ -172,9 +190,12 @@ class Drill(Magics):
                 self.drill_opts['drill_url'][0] = "%s://%s:%s" % ( self.drill_opts['drill_base_url_scheme'][0],  self.drill_opts['drill_pinned_ip'][0] ,  self.drill_opts['drill_base_url_port'][0])
                 if self.drill_opts['drill_rewrite_host'][0] == True:
                     self.session.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
-                    self.drill_opts['drill_headers'][0]['Host'] = self.drill_opts['drill_base_url_host'][0] + ":" + self.drill_opts['drill_base_url_port'][0]
+                    if self.drill_opts['drill_inc_port_in_rewrite'][0] == True:
+                        self.drill_opts['drill_headers'][0]['Host'] = self.drill_opts['drill_base_url_host'][0] + ":" + self.drill_opts['drill_base_url_port'][0]
+                    else:
+                        self.drill_opts['drill_headers'][0]['Host'] = self.drill_opts['drill_base_url_host'][0]
                     if self.debug:
-                        print(self.drill_opts['drill_headers'][0])
+                        print("Headers in connectDrill: %s" % self.drill_opts['drill_headers'][0])
             else:
                 self.drill_opts['drill_url'][0] = self.drill_opts['drill_base_url'][0]
 
@@ -217,7 +238,7 @@ class Drill(Magics):
         login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
         result = -1
         if self.debug:
-            print(self.drill_opts['drill_headers'][0])
+            print("Headers is authDrill: %s" % self.drill_opts['drill_headers'][0])
         r = self.session.post(url, data=login, headers=self.drill_opts['drill_headers'][0], verify=self.drill_opts['drill_verify'][0])
 
         if r.status_code == 200:
@@ -300,7 +321,8 @@ class Drill(Magics):
                             #display(button)
 
                             if mycnt <= self.drill_opts['pd_display.max_rows'][0]:
-                                print("Testing max_colwidth: %s" %  pd.get_option('max_colwidth'))
+                                if self.debug:
+                                    print("Testing max_colwidth: %s" %  pd.get_option('max_colwidth'))
                                 display(HTML(df.to_html(index=self.drill_opts['pd_display_idx'][0])))
                             else:
                                 print("Number of results (%s) greater than pd_display_max(%s)" % (mycnt, self.drill_opts['pd_display.max_rows'][0]))
