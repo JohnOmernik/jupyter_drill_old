@@ -63,7 +63,7 @@ class Drill(Magics):
     drill_opts['drill_base_url_port'] = ["", "Port of drill connection derived from drill_base_url"]
     drill_opts['drill_base_url_scheme'] = ["", "Scheme of drill connection derived from drill_base_url"]
 
-    drill_opts['drill_pin_to_ip'] = [True, "Obtain an IP from the name and connect directly to that IP"]
+    drill_opts['drill_pin_to_ip'] = [False, "Obtain an IP from the name and connect directly to that IP"]
     drill_opts['drill_pinned_ip'] = ["", "IP of pinned connection"]
     drill_opts['drill_rewrite_host'] = [False, "When using Pin to IP, rewrite the host header to match the name of base_url"]
     drill_opts['drill_headers'] = [{}, "Customer Headers to use for Drill connections"]
@@ -81,6 +81,7 @@ class Drill(Magics):
     def retStatus(self):
         print("Current State of Drill Interface:")
         print("Connected: %s" % self.drill_connected)
+        print("Debug Mode: %s" % self.debug)
         print("")
         print("Display Properties:")
         for k, v in self.drill_opts.items():
@@ -215,7 +216,8 @@ class Drill(Magics):
         url = self.drill_opts['drill_url'][0] + "/j_security_check"
         login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
         result = -1
-        print(self.drill_opts['drill_headers'][0])
+        if self.debug:
+            print(self.drill_opts['drill_headers'][0])
         r = self.session.post(url, data=login, headers=self.drill_opts['drill_headers'][0], verify=self.drill_opts['drill_verify'][0])
 
         if r.status_code == 200:
@@ -254,6 +256,9 @@ class Drill(Magics):
                 print("")
             elif line.lower() == "status":
                 self.retStatus()
+            elif line.lower() == "debug":
+                print("Toggling Debug from %s to %s" % (self.debug, not self.debug))
+                self.debug = not self.debug
             elif line.lower() == "disconnect":
                 self.disconnectDrill()
             elif line.lower() == "connect alt":
