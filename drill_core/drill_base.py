@@ -59,8 +59,12 @@ class Drill(Magics):
     # Drill specific variables
     drill_opts['drill_user'] = [tuser, "User to connect with drill - Can be set via ENV Var: JPY_USER otherwise will prompt"]
     drill_opts['drill_base_url'] = [turl, "URL to connect to Drill server. Can be set via ENV Var: DRILL_BASE_URL"]
+    drill_opts['drill_base_url_host'] = ["", "Hostname of drill connection derived from drill_base_url"]
+    drill_opts['drill_base_url_port'] = ["", "Port of drill connection derived from drill_base_url"]
+    drill_opts['drill_base_url_scheme'] = ["", "Scheme of drill connection derived from drill_base_url"]
 
     drill_opts['drill_pin_to_ip'] = [True, "Obtain an IP from the name and connect directly to that IP"]
+    drill_opts['drill_pinned_ip'] = ["", "IP of pinned connection"]
     drill_opts['drill_rewrite_host'] = [False, "When using Pin to IP, rewrite the host header to match the name of base_url"]
     drill_opts['drill_headers'] = [{}, "Customer Headers to use for Drill connections"]
     drill_opts['drill_url'] = ['', "Actual URL used for connection (base URL is the URL that is passed in as default"]
@@ -144,6 +148,14 @@ class Drill(Magics):
                 self.drill_opts['drill_base_url'][0] = turl
             print("Connecting to Drill URL: %s" % self.drill_opts['drill_base_url'][0])
             print("")
+            myurl = self.drill_opts['drill_base_url'][0]
+            ts1 = myurl.split("://")
+            self.drill_opts['drill_base_url_scheme'][0] = ts1[0]
+            t1 = ts1[1]
+            ts2 = t1.split(":")
+            self.drill_opts['drill_base_url_host'][0] = ts2[0]
+            self.drill_opts['drill_base_url_port'][0] = ts2[1]
+
 
             print("Please enter the password you wish to connect with:")
             tpass = ""
@@ -152,24 +164,22 @@ class Drill(Magics):
             self.session = requests.Session()
 
             if self.drill_opts['drill_pin_to_ip'][0] == True:
-                tipurl = self.getipurl(self.drill_opts['drill_base_url'][0])
+                self.drill_opts['drill_pinned_ip'][0] = self.getipurl(self.drill_opts['drill_base_url'][0])
                 print("")
-                print("Pinning to IP for this session: %s" % tipurl)
+                print("Pinning to IP for this session: %s" % self.drill_opts['drill_pinned_ip'][0])
                 print("")
-                self.drill_opts['drill_url'][0] = tipurl
-#                self.session.mount(tipurl, host_header_ssl.HostHeaderSSLAdapter())
+                self.drill_opts['drill_url'][0] = "%s://%s:%s" % ( self.drill_opts['drill_base_url_scheme'][0],  self.drill_opts['drill_pinned_ip'][0] ,  self.drill_opts['drill_base_url_port'][0])
                 if self.drill_opts['drill_rewrite_host'][0] == True:
-#                    self.session.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
-                    t = self.drill_opts['drill_base_url'][0]
-                    spltAr = t.split("://")
-                    i = (0,1)[len(spltAr)>1]
-                    dm = spltAr[i].split("?")[0].split('/')[0].split(':')[0].lower()
-                    self.drill_opts['drill_headers'][0]['Host'] = dm
+                    self.session.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
+                    self.drill_opts['drill_headers'][0]['Host'] = self.drill_opts['drill_base_url_host'][0] + ":" + self.drill_opts['drill_base_url_port'][0]
+                    if self.debug:
+                        print(self.drill_opts['drill_headers'][0])
             else:
                 self.drill_opts['drill_url'][0] = self.drill_opts['drill_base_url'][0]
 
             self.drill_pass = tpass
             self.myip.user_ns['tpass'] = ""
+
             if self.drill_opts['drill_ignore_ssl_warn'][0] == True:
                 print("Warning: Setting session to ignore SSL warnings - Use at your own risk")
                 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -307,9 +317,12 @@ class Drill(Magics):
         ts2 = t1.split(":")
         host = ts2[0]
         port = ts2[1]
-        ip = socket.gethostbyname(host)
-        ipurl = "%s://%s:%s" % (scheme, ip, port)
-        return ipurl
+        try:
+            ip = socket.gethostbyname(host)
+        except:
+            print("Failure on IP Lookup - URL: %s Host: %s Port: %s" % (url, host, port))
+        return ip
+
 
 
     #Display Only functions
