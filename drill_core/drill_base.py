@@ -245,6 +245,10 @@ class Drill(Magics):
 
     def authDrill(self):
         url = self.drill_opts['drill_url'][0] + "/j_security_check"
+        if self.debug:
+            print("")
+            print("Connecting URL: %s" % url)
+            print("")
         login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
         result = -1
         if self.debug:
