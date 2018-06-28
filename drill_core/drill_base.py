@@ -144,17 +144,21 @@ class Drill(Magics):
     def disconnectDrill(self):
         if self.drill_connected == True:
             print("Disconnected Drill Session from %s" % self.drill_opts['drill_url'][0])
-            self.session = None
-            self.drill_pass = None
-            self.drill_connected = False
-            self.drill_opts['drill_url'][0] = ''
-            self.drill_opts['drill_base_url_host'][0] = ''
-            self.drill_opts['drill_base_url_port'][0] = ''
-            self.drill_opts['drill_base_url_scheme'][0] = ''
-            self.drill_opts['drill_pinned_ip'][0] = ''
-            self.drill_opts['drill_headers'][0] = {}
         else:
-            print("Drill Not Currently Connected")
+            print("Drill Not Currently Connected - Resetting All Variables")
+        self.session = None
+        self.drill_pass = None
+        self.drill_connected = False
+        self.drill_opts['drill_url'][0] = ''
+        self.drill_opts['drill_base_url_host'][0] = ''
+        self.drill_opts['drill_base_url_port'][0] = ''
+        self.drill_opts['drill_base_url_scheme'][0] = ''
+        self.drill_opts['drill_pinned_ip'][0] = ''
+        self.drill_opts['drill_headers'][0] = {}
+
+
+
+
 
     def connectDrill(self, prompt=False):
         global tpass
@@ -221,7 +225,8 @@ class Drill(Magics):
         else:
             print("Drill is already connected - Please type %drill for help on what you can you do")
 
-
+        if self.drill_connected != True:
+            self.disconnectDrill()
 
     def runQuery(self, query):
         if query.find(";") >= 0:
