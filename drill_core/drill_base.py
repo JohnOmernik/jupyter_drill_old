@@ -148,6 +148,11 @@ class Drill(Magics):
             self.drill_pass = None
             self.drill_connected = False
             self.drill_opts['drill_url'][0] = ''
+            self.drill_opts['drill_base_url_host'][0] = ''
+            self.drill_opts['drill_base_url_port'][0] = ''
+            self.drill_opts['drill_base_url_scheme'][0] = ''
+            self.drill_opts['drill_pinned_ip'][0] = ''
+            self.drill_opts['drill_headers'][0] = {}
         else:
             print("Drill Not Currently Connected")
 
@@ -238,7 +243,9 @@ class Drill(Magics):
         login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
         result = -1
         if self.debug:
-            print("Headers is authDrill: %s" % self.drill_opts['drill_headers'][0])
+            print("")
+            print("Headers in authDrill: %s" % self.drill_opts['drill_headers'][0])
+            print("")
         r = self.session.post(url, data=login, headers=self.drill_opts['drill_headers'][0], verify=self.drill_opts['drill_verify'][0])
 
         if r.status_code == 200:
