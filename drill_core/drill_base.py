@@ -270,6 +270,38 @@ class Drill(Magics):
             raise Exception("Status Code: %s - Error" % r.status_code)
         return self.session, result
 
+    def displayHelp(self):
+        print("jupyter_drill is a interface that allows you to use the magic function %drill to interact with an Apache Drill installation.")
+        print("")
+        print("jupyter_drill has two main modes %drill and %%drill")
+        print("%drill is for interacting with a Drill installation, connecting, disconnecting, seeing status, etc")
+        print("%%drill is for running queries and obtaining results back from the Drill cluster")
+        print("")
+        print("%drill functions available")
+        print("###############################################################################################")
+        print("")
+        print("{: <30} {: <80}".format(*["%drill", "This help screen"]))
+        print("{: <30} {: <80}".format(*["%drill status", "Print the status of the Drill connection and variables used for output"]))
+        print("{: <30} {: <80}".format(*["%drill connect", "Initiate a connection to the Drill cluster, attempting to use the ENV variables for Drill URL and Drill Username"]))
+        print("{: <30} {: <80}".format(*["%drill connect alt", "Initiate a connection to the Drill cluster, but prompt for Username and URL regardless of ENV variables"]))
+        print("{: <30} {: <80}".format(*["%drill disconnect", "Disconnect an active Drill connection and reset connection variables"]))
+        print("{: <30} {: <80}".format(*["%drill set %variable% %value%", "Set the variable %variable% to the value %value%"]))
+        print("{: <30} {: <80}".format(*["%drill debug", "Sets an internal debug variable to True (False by default) to see more verbose info about connections"]))
+        print("")
+        print("Running queries with %%drill")
+        print("###############################################################################################")
+        print("")
+        print("When running queries with %%drill, %%drill will be on the first line of your cell, and the next line is the query you wish to run. Example:")
+        print("")
+        print("%%drill")
+        print("select * from `dfs`.`root`.`mytable`")
+        print("")
+        print("Some query notes:")
+        print("- If the number of results is less than pd_display.max_rows, then the results we be diplayed in your notebook")
+        print("- You can change pd_display.max_rows with %drill set pd_display.max_rows 2000")
+        print("- The results, regardless of display will be place in a Pandas Dataframe variable called prev_drill")
+        print("- prev_drill is overwritten every time a successful query is run. If you want to save results assign it to a new variable")
+
 
 
     @line_cell_magic
@@ -277,20 +309,7 @@ class Drill(Magics):
         if cell is None:
             line = line.replace("\r", "")
             if line == "":
-                print("Help with Drill Functions")
-                print("%drill            - This Help")
-                print("%drill connect    - Connect to your instance of Drill") 
-                print("%drill connect alt   - Connect to a different drill cluster or use a different user (will prompt)")
-                print("%drill status     - Show the Connection Status of Drill")
-                print("%drill disconnect - Disconnect from your instance of Drill")
-                print("")
-                print("Run Drill Queries")
-                print("%%drill")
-                print("select * from your table")
-                print("")
-                print("Ran with two % and a query, it queries a table and returns a df")
-                print("The df is displayed but also stored in variable called prev_drill")
-                print("")
+                self.displayHelp()
             elif line.lower() == "status":
                 self.retStatus()
             elif line.lower() == "debug":
