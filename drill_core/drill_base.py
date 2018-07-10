@@ -23,7 +23,7 @@ import pandas as pd
 class Drill(Magics):
     # Static Variables
     myip = None
-    session = None
+    mysession = None
     drill_connected = False
     drill_pass = ""
 
@@ -75,9 +75,11 @@ class Drill(Magics):
 
 
     # Class Init function - Obtain a reference to the get_ipython()
-    def __init__(self, shell, *args, **kwargs):
+    def __init__(self, shell, drill_pin_to_ip=False, drill_rewrite_host=False,*args, **kwargs):
         super(Drill, self).__init__(shell)
         self.myip = get_ipython()
+        self.drill_opts['drill_pin_to_ip'][0] = drill_pin_to_ip
+        self.drill_opts['drill_rewrite_host'][0] = drill_rewrite_host
 
     def retStatus(self):
 
@@ -146,7 +148,7 @@ class Drill(Magics):
             print("Disconnected Drill Session from %s" % self.drill_opts['drill_url'][0])
         else:
             print("Drill Not Currently Connected - Resetting All Variables")
-        self.session = None
+        self.mysession = None
         self.drill_pass = None
         self.drill_connected = False
         self.drill_opts['drill_url'][0] = ''
@@ -184,29 +186,10 @@ class Drill(Magics):
             self.drill_opts['drill_base_url_host'][0] = ts2[0]
             self.drill_opts['drill_base_url_port'][0] = ts2[1]
 
-
             print("Please enter the password you wish to connect with:")
             tpass = ""
             self.myip.ex("from getpass import getpass\ntpass = getpass(prompt='Drill Connect Password: ')")
             tpass = self.myip.user_ns['tpass']
-            self.session = requests.Session()
-
-            if self.drill_opts['drill_pin_to_ip'][0] == True:
-                self.drill_opts['drill_pinned_ip'][0] = self.getipurl(self.drill_opts['drill_base_url'][0])
-                print("")
-                print("Pinning to IP for this session: %s" % self.drill_opts['drill_pinned_ip'][0])
-                print("")
-                self.drill_opts['drill_url'][0] = "%s://%s:%s" % ( self.drill_opts['drill_base_url_scheme'][0],  self.drill_opts['drill_pinned_ip'][0] ,  self.drill_opts['drill_base_url_port'][0])
-                if self.drill_opts['drill_rewrite_host'][0] == True:
-                    self.session.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
-                    if self.drill_opts['drill_inc_port_in_rewrite'][0] == True:
-                        self.drill_opts['drill_headers'][0]['Host'] = self.drill_opts['drill_base_url_host'][0] + ":" + self.drill_opts['drill_base_url_port'][0]
-                    else:
-                        self.drill_opts['drill_headers'][0]['Host'] = self.drill_opts['drill_base_url_host'][0]
-                    if self.debug:
-                        print("Headers in connectDrill: %s" % self.drill_opts['drill_headers'][0])
-            else:
-                self.drill_opts['drill_url'][0] = self.drill_opts['drill_base_url'][0]
 
             self.drill_pass = tpass
             self.myip.user_ns['tpass'] = ""
@@ -215,7 +198,7 @@ class Drill(Magics):
                 print("Warning: Setting session to ignore SSL warnings - Use at your own risk")
                 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
             result = -1
-            self.session, result = self.authDrill()
+            result = self.authDrill()
             if result == 0:
                 self.drill_connected = True
                 print("%s - Drill Connected!" % self.drill_opts['drill_url'][0])
@@ -238,16 +221,37 @@ class Drill(Magics):
             cur_headers = self.drill_opts['drill_headers'][0]
             cur_headers["Content-type"] = "application/json"
             starttime = int(time.time())
-            r = self.session.post(url, data=json.dumps(payload), headers=cur_headers, verify=self.drill_opts['drill_verify'][0])
+            r = self.mysession.post(url, data=json.dumps(payload), headers=cur_headers, verify=self.drill_opts['drill_verify'][0])
             endtime = int(time.time())
             query_time = endtime - starttime
             return r, query_time
 
     def authDrill(self):
-        url = self.drill_opts['drill_url'][0] + "/j_security_check"
+
+        self.mysession = None
+        self.mysession = requests.Session()
+        self.mysession.allow_redirects = False
+        if self.drill_opts['drill_pin_to_ip'][0] == True:
+                self.drill_opts['drill_pinned_ip'][0] = self.getipurl(self.drill_opts['drill_base_url'][0])
+                print("")
+                print("Pinning to IP for this session: %s" % self.drill_opts['drill_pinned_ip'][0])
+                print("")
+                self.drill_opts['drill_url'][0] = "%s://%s:%s" % ( self.drill_opts['drill_base_url_scheme'][0],  self.drill_opts['drill_pinned_ip'][0] ,  self.drill_opts['drill_base_url_port'][0])
+                if self.drill_opts['drill_rewrite_host'][0] == True:
+                    self.mysession.mount("https://", host_header_ssl.HostHeaderSSLAdapter())
+                    if self.drill_opts['drill_inc_port_in_rewrite'][0] == True:
+                        self.drill_opts['drill_headers'][0]['host'] = self.drill_opts['drill_base_url_host'][0] + ":" + self.drill_opts['drill_base_url_port'][0]
+                    else:
+                        self.drill_opts['drill_headers'][0]['host'] = self.drill_opts['drill_base_url_host'][0]
+                    if self.debug:
+                        print("Headers in connectDrill: %s" % self.drill_opts['drill_headers'][0])
+        else:
+            self.drill_opts['drill_url'][0] = self.drill_opts['drill_base_url'][0]
+
+        myurl = self.drill_opts['drill_url'][0] + "/j_security_check"
         if self.debug:
             print("")
-            print("Connecting URL: %s" % url)
+            print("Connecting URL: %s" % myurl)
             print("")
         login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
         result = -1
@@ -255,7 +259,9 @@ class Drill(Magics):
             print("")
             print("Headers in authDrill: %s" % self.drill_opts['drill_headers'][0])
             print("")
-        r = self.session.post(url, data=login, headers=self.drill_opts['drill_headers'][0], verify=self.drill_opts['drill_verify'][0])
+        if self.debug:
+            print("Adapters: %s" % self.mysession.adapters)
+        r = self.mysession.post(myurl, allow_redirects=False, data=login, headers=self.drill_opts['drill_headers'][0], verify=self.drill_opts['drill_verify'][0])
 
         if r.status_code == 200:
             if r.text.find("Invalid username/password credentials") >= 0:
@@ -266,9 +272,12 @@ class Drill(Magics):
                 result = 0
             else:
                 raise Exception("Unknown HTTP 200 Code: %s" % r.text)
+        elif r.status_code == 303:
+            pass
+            result = 0
         else:
             raise Exception("Status Code: %s - Error" % r.status_code)
-        return self.session, result
+        return result
 
     def displayHelp(self):
         print("jupyter_drill is a interface that allows you to use the magic function %drill to interact with an Apache Drill installation.")
