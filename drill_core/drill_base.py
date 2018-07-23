@@ -40,7 +40,7 @@ class Drill(Magics):
     drill_opts['pd_max_colwidth'] = [50, 'Max column width to display']
     drill_opts['pd_display.max_rows'] = [1000, 'Number of Max Rows']
     drill_opts['pd_display.max_columns'] = [None, 'Max Columns']
-
+    drill_opts['pd_use_beaker'] = [False, 'Use the Beaker system for Pandas Display']
 
     pd.set_option('display.max_columns', drill_opts['pd_display.max_columns'][0])
     pd.set_option('display.max_rows', drill_opts['pd_display.max_rows'][0])
@@ -75,11 +75,15 @@ class Drill(Magics):
 
 
     # Class Init function - Obtain a reference to the get_ipython()
-    def __init__(self, shell, drill_pin_to_ip=False, drill_rewrite_host=False,*args, **kwargs):
+    def __init__(self, shell, drill_pin_to_ip=False, drill_rewrite_host=False, pd_use_beaker=False, *args, **kwargs):
         super(Drill, self).__init__(shell)
         self.myip = get_ipython()
         self.drill_opts['drill_pin_to_ip'][0] = drill_pin_to_ip
         self.drill_opts['drill_rewrite_host'][0] = drill_rewrite_host
+        self.drill_opts['pd_use_beaker'][0] = pd_use_beaker
+        if pd_use_beaker == True:
+            from beakerx import *
+            beakerx.pandas_display_table()
 
     def retStatus(self):
 
