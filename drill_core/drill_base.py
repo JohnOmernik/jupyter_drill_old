@@ -13,17 +13,16 @@ from requests_toolbelt.adapters import host_header_ssl
 requests.packages.urllib3.disable_warnings(SubjectAltNameWarning)
 from collections import OrderedDict
 from IPython.core.display import HTML
+import pandas as pd
 
 try:
     from beakerx import *
 except:
     pass
 
-
 #import IPython.display
 from IPython.display import display_html, display, Javascript, FileLink, FileLinks, Image
 import ipywidgets as widgets
-import pandas as pd
 
 @magics_class
 class Drill(Magics):
@@ -379,7 +378,10 @@ class Drill(Magics):
                             if mycnt <= self.drill_opts['pd_display.max_rows'][0]:
                                 if self.debug:
                                     print("Testing max_colwidth: %s" %  pd.get_option('max_colwidth'))
-                                display(HTML(df.to_html(index=self.drill_opts['pd_display_idx'][0])))
+                                if self.drill_opts['pd_use_beaker'][0] == True:
+                                    TableDisplay(df)
+                                else:
+                                    display(HTML(df.to_html(index=self.drill_opts['pd_display_idx'][0])))
                             else:
                                 print("Number of results (%s) greater than pd_display_max(%s)" % (mycnt, self.drill_opts['pd_display.max_rows'][0]))
 
