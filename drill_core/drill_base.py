@@ -89,7 +89,6 @@ class Drill(Magics):
         if pd_use_beaker == True:
             try:
                 beakerx.pandas_display_table()
-                self.myip.ex("from beakerx import *\nbeakerx.pandas_display_table()")
             except:
                 print("WARNING - BEAKER SUPPORT FAILED")
 
@@ -372,15 +371,12 @@ class Drill(Magics):
                             mycnt = len(df)
                             print("%s Records in Approx %s seconds" % (mycnt,qtime))
                             print("")
-                            #button = widgets.Button(description="Cur Results")
-                            #button.on_click(self.myip.user_ns['drill_edwin_class'].resultsNewWin)
-                            #display(button)
 
                             if mycnt <= self.drill_opts['pd_display.max_rows'][0]:
                                 if self.debug:
                                     print("Testing max_colwidth: %s" %  pd.get_option('max_colwidth'))
                                 if self.drill_opts['pd_use_beaker'][0] == True:
-                                    TableDisplay(df)
+                                    display(TableDisplay(df))
                                 else:
                                     display(HTML(df.to_html(index=self.drill_opts['pd_display_idx'][0])))
                             else:
