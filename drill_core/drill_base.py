@@ -14,6 +14,12 @@ requests.packages.urllib3.disable_warnings(SubjectAltNameWarning)
 from collections import OrderedDict
 from IPython.core.display import HTML
 
+try:
+    from beakerx import *
+except:
+    pass
+
+
 #import IPython.display
 from IPython.display import display_html, display, Javascript, FileLink, FileLinks, Image
 import ipywidgets as widgets
@@ -82,8 +88,10 @@ class Drill(Magics):
         self.drill_opts['drill_rewrite_host'][0] = drill_rewrite_host
         self.drill_opts['pd_use_beaker'][0] = pd_use_beaker
         if pd_use_beaker == True:
-            from beakerx import *
-            beakerx.pandas_display_table()
+            try:
+                beakerx.pandas_display_table()
+            except:
+                print("WARNING - BEAKER SUPPORT FAILED")
 
     def retStatus(self):
 
