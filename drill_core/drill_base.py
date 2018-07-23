@@ -89,6 +89,7 @@ class Drill(Magics):
         if pd_use_beaker == True:
             try:
                 beakerx.pandas_display_table()
+                self.myip.ex("from beakerx import *\nbeakerx.pandas_display_table()")
             except:
                 print("WARNING - BEAKER SUPPORT FAILED")
 
@@ -132,7 +133,7 @@ class Drill(Magics):
 
 
     def setvar(self, line):
-        pd_set_vars = ['pd_display.max_columns', 'pd_display.max_rows', 'pd_max_colwidth']
+        pd_set_vars = ['pd_display.max_columns', 'pd_display.max_rows', 'pd_max_colwidth', 'pd_use_beaker']
         allowed_opts = pd_set_vars + ['pd_replace_crlf', 'pd_display_idx', 'drill_base_url', 'drill_verify', 'drill_pin_to_ip', 'drill_rewrite_host', 'drill_ignore_ssl_warn', 'drill_inc_port_in_rewrite']
 
         tline = line.replace('set ', '')
