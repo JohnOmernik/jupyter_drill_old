@@ -372,7 +372,7 @@ class Drill(Magics):
                             print("%s Records in Approx %s seconds" % (mycnt,qtime))
                             print("")
 
-                            if mycnt <= self.drill_opts['pd_display.max_rows'][0]:
+                            if mycnt <= int(self.drill_opts['pd_display.max_rows'][0]):
                                 if self.debug:
                                     print("Testing max_colwidth: %s" %  pd.get_option('max_colwidth'))
                                 if self.drill_opts['pd_use_beaker'][0] == True:
