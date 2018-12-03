@@ -359,7 +359,7 @@ class Drill(Magics):
                 else:
                     if res is None:
                         mycode = 509
-                    else
+                    else:
                         mycode = res.status_code
                     if mycode == 200:
                         if res.text.find("Invalid username/password credentials.") >= 0:
