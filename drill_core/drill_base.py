@@ -232,7 +232,12 @@ class Drill(Magics):
             cur_headers = self.drill_opts['drill_headers'][0]
             cur_headers["Content-type"] = "application/json"
             starttime = int(time.time())
-            r = self.mysession.post(url, data=json.dumps(payload), headers=cur_headers, verify=self.drill_opts['drill_verify'][0])
+            try:
+                r = self.mysession.post(url, data=json.dumps(payload), headers=cur_headers, verify=self.drill_opts['drill_verify'][0])
+            except:
+                r = None
+                print("Exception Running Query: Disconnection")
+                self.disconnectDrill()
             endtime = int(time.time())
             query_time = endtime - starttime
             return r, query_time
@@ -352,7 +357,11 @@ class Drill(Magics):
                 if res == "notconnected":
                     pass
                 else:
-                    if res.status_code == 200:
+                    if res is None:
+                        mycode = 509
+                    else
+                        mycode = res.status_code
+                    if mycode == 200:
                         if res.text.find("Invalid username/password credentials.") >= 0:
                             print("It looks like your Drill Session has expired, please run %drill connect to resolve")
                             self.disconnectDrill()
@@ -384,7 +393,7 @@ class Drill(Magics):
 
 
                     else:
-                        print("Error Returned - Code: %s" % res.status_code)
+                        print("Error Returned - Code: %s" % mycode)
                         emsg = json.loads(res.text, object_pairs_hook=OrderedDict)
                         print("Error Text:\n%s" % emsg['errorMessage'])
             else:
