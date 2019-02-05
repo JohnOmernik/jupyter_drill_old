@@ -10,7 +10,7 @@ This is a python module that helps to connect Jupyter Notebooks to Apache Drill.
 After installing this, to instantiate the module so you can use %drill and %%drill put this in a cell:
 
 ```
-from drill_core1 import Drill
+from drill_core import Drill
 ipy = get_ipython()
 Drill = Drill(ipy, drill_pin_to_ip=True, drill_rewrite_host=True, pd_use_beaker=True)
 ipy.register_magics(Drill)
