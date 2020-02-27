@@ -178,9 +178,13 @@ class Drill(Magics):
         if self.drill_connected == False:
             if prompt == True or self.drill_opts['drill_user'][0] == '':
                 print("User not specified in JPY_USER or user override requested")
-                tuser = input("Please type user name if desired: ")
+                tuser = input("Please type username if desired: ")
                 self.drill_opts['drill_user'][0] = tuser
-            print("Connecting as user %s" % self.drill_opts['drill_user'][0])
+
+            if self.drill_opts['drill_user'][0] == "":
+                print("Username is blank, authentication will be skipped")
+            else:
+                print("Connecting as user %s" % self.drill_opts['drill_user'][0])
             print("")
 
             if prompt == True or self.drill_opts['drill_base_url'][0] == '':
@@ -197,10 +201,11 @@ class Drill(Magics):
             self.drill_opts['drill_base_url_host'][0] = ts2[0]
             self.drill_opts['drill_base_url_port'][0] = ts2[1]
 
-            print("Please enter the password you wish to connect with:")
             tpass = ""
-            self.myip.ex("from getpass import getpass\ntpass = getpass(prompt='Drill Connect Password: ')")
-            tpass = self.myip.user_ns['tpass']
+            if self.drill_opts['drill_user'][0] != "":
+                print("Please enter the password you wish to connect with:")
+                self.myip.ex("from getpass import getpass\ntpass = getpass(prompt='Drill Connect Password: ')")
+                tpass = self.myip.user_ns['tpass']
 
             self.drill_pass = tpass
             self.myip.user_ns['tpass'] = ""
@@ -208,6 +213,8 @@ class Drill(Magics):
             if self.drill_opts['drill_ignore_ssl_warn'][0] == True:
                 print("Warning: Setting session to ignore SSL warnings - Use at your own risk")
                 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+            self.initTransport()
             result = -1
             result = self.authDrill()
             if result == 0:
@@ -242,8 +249,7 @@ class Drill(Magics):
             query_time = endtime - starttime
             return r, query_time
 
-    def authDrill(self):
-
+    def initTransport(self):
         self.mysession = None
         self.mysession = requests.Session()
         self.mysession.allow_redirects = False
@@ -264,10 +270,14 @@ class Drill(Magics):
         else:
             self.drill_opts['drill_url'][0] = self.drill_opts['drill_base_url'][0]
 
+    def authDrill(self):
+        if self.drill_opts['drill_user'][0] == "":
+            return 0
+
         myurl = self.drill_opts['drill_url'][0] + "/j_security_check"
         if self.debug:
             print("")
-            print("Connecting URL: %s" % myurl)
+            print("Requesting URL: %s" % myurl)
             print("")
         login = {'j_username': self.drill_opts['drill_user'][0], 'j_password': self.drill_pass}
         result = -1
